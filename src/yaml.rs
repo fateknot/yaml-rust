@@ -333,9 +333,14 @@ impl Index<usize> for Yaml {
     type Output = Yaml;
 
     fn index(&self, idx: usize) -> &Yaml {
-        match self.as_vec() {
-            Some(v) => v.get(idx).unwrap_or(&BAD_VALUE),
-            None => &BAD_VALUE
+        if let Some(v) = self.as_vec() {
+            v.get(idx).unwrap_or(&BAD_VALUE)
+        } else {
+            let key = Yaml::Integer(idx as i64);
+            match self.as_hash() {
+                Some(h) => h.get(&key).unwrap_or(&BAD_VALUE),
+                None => &BAD_VALUE
+            }
         }
     }
 }
@@ -367,6 +372,7 @@ impl Iterator for YamlIter {
 #[cfg(test)]
 mod test {
     use yaml::*;
+
     #[test]
     fn test_coerce() {
         let s = "---
@@ -413,6 +419,22 @@ a7: 你好
         assert_eq!(doc["a7"].as_str().unwrap(), "你好");
     }
 
+    #[test]
+    fn test_integer_key() {
+        let s = "---
+1: spam
+2: 1
+5: 1.2
+
+";
+        let out = YamlLoader::load_from_str(&s).unwrap();
+        let doc = &out[0];
+        assert_eq!(doc[1].as_str().unwrap(), "spam");
+        assert_eq!(doc[2].as_i64().unwrap(), 1i64);
+        assert_eq!(doc[5].as_f64().unwrap(), 1.2f64);
+        assert!(doc[3].is_badvalue());
+    }
+    
     #[test]
     fn test_multi_doc() {
         let s =
